@@ -37,7 +37,7 @@
 
 expressions
     : e EOF
-        { return (function(lambdas) { return new Function('data', 'return ' + $1) })(lambdas); }
+        { return (function() { return new Function('data', 'return ' + $1) })(); }
     ;
 
 e

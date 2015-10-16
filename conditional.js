@@ -84,7 +84,7 @@ performAction: function anonymous(yytext, yyleng, yylineno, yy, yystate /* actio
 var $0 = $$.length - 1;
 switch (yystate) {
 case 1:
- return (function(lambdas) { return new Function('data', 'return ' + $$[$0-1]) })(lambdas); 
+ return (function() { return new Function('data', 'return ' + $$[$0-1]) })(); 
 break;
 case 2:
 this.$ = 'lambdas.' + $$[$0] + '.call(' + $$[$0-2] + ')'; 
