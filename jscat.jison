@@ -41,6 +41,7 @@ StringLiteral (\"{DoubleStringCharacter}*\")|(\'{SingleStringCharacter}*\')
 {HexIntegerLiteral}                parser.restricted = false; return "NUMERIC_LITERAL";
 {OctalIntegerLiteral}              parser.restricted = false; return "NUMERIC_LITERAL";
 "{"                                parser.restricted = false; return "{";
+\s+                   /* skip whitespace */
 "}"                                return "}";
 "("                                parser.restricted = false; return "(";
 ")"                                return ")";
@@ -56,6 +57,7 @@ StringLiteral (\"{DoubleStringCharacter}*\")|(\'{SingleStringCharacter}*\')
 "!=="                              return "!==";
 "!="                               return "!=";
 "!"                                parser.restricted = false; return "!";
+"|"                                return "|";
 "<="                               return "<=";
 "<"                                return "<";
 ">="                               return ">=";
@@ -91,17 +93,9 @@ lexer.lex = function() {
 %% /* Define Grammar Productions */
 
 Statement
-    : Block
-    | EmptyStatement
+    : EmptyStatement
     | ExpressionStatement
     | LabelledStatement
-    ;
-
-Block
-    : "{" StatementList "}"
-        {
-            $$ = new BlockStatementNode($2);
-        }
     ;
 
 StatementList
@@ -116,58 +110,21 @@ StatementList
     ;
 
 
-VariableDeclarationList
-    : VariableDeclaration
-        {
-            $$ = [$1];
-        }
-    | VariableDeclarationList "," VariableDeclaration
-        {
-            $$ = $1.concat($3);
-        }
-    ;
-
-VariableDeclarationListNoIn
-    : VariableDeclarationNoIn
-        {
-            $$ = [$1];
-        }
-    | VariableDeclarationListNoIn "," VariableDeclarationNoIn
-        {
-            $$ = $1.concat($3);
-        }
-    ;
-
-VariableDeclaration
-    : "IDENTIFIER"
-        {
-            $$ = new VariableDeclaratorNode(new IdentifierNode($1), null);
-        }
-    ;
-
-VariableDeclarationNoIn
-    : "IDENTIFIER"
-        {
-            $$ = new VariableDeclaratorNode(new IdentifierNode($1), null);
-        }
-    ;
-
-
 EmptyStatement
     : ";"
         {
-            $$ = new EmptyStatementNode();
+            $$ = EmptyStatementNode();
         }
     ;
 
 ExpressionStatement
     : ExpressionNoBF ";"
         {
-            $$ = new ExpressionStatementNode($1);
+            $$ = ExpressionStatementNode($1);
         }
     | ExpressionNoBF error
         {
-            $$ = new ExpressionStatementNode($1);
+            $$ = ExpressionStatementNode($1);
         }
     ;
 
@@ -175,14 +132,14 @@ ExpressionStatement
 LabelledStatement
     : "IDENTIFIER" ":" Statement
         {
-            $$ = new LabeledStatementNode(new IdentifierNode($1), $3);
+            $$ = LabeledStatementNode($1, $3);
         }
     ;
 
 FormalParameterList
     : "IDENTIFIER"
         {
-            $$ = [new IdentifierNode($1)];
+            $$ = [$1];
         }
     | FormalParameterList "," "IDENTIFIER"
         {
@@ -197,7 +154,7 @@ FunctionBody
 Program
     : SourceElements EOF
         {
-            $$ = new ProgramNode($1);
+            $$ = (function(decorators) { return new Function('data', 'return ' + $1 + ';' ) })(decorators);
             return $$;
         }
     ;
@@ -209,7 +166,7 @@ SourceElements
         }
     |
         {
-            $$ = [];
+            $$ = "";
         }
     ;
 
@@ -219,46 +176,46 @@ SourceElement
 
 PrimaryExpression
     : PrimaryExpressionNoBrace
-    | ObjectLiteral
     ;
 
 PrimaryExpressionNoBrace
     : "THIS"
         {
-            $$ = new ThisExpressionNode();
+            $$ = ThisExpressionNode();
         }
     | "IDENTIFIER"
         {
-            $$ = new IdentifierNode($1);
+            $$ = 'data.' + $1;
         }
     | Literal
     | ArrayLiteral
+    | ObjectLiteral
     | "(" Expression ")"
         {
-            $$ = $2;
+            $$ = $1 + $2 + $3;
         }
     ;
 
 ArrayLiteral
     : "[" "]"
         {
-            $$ = new ArrayExpressionNode([]);
+            $$ = ArrayExpressionNode([]);
         }
     | "[" Elision "]"
         {
-            $$ = new ArrayExpressionNode($2);
+            $$ = ArrayExpressionNode($2);
         }
     | "[" ElementList "]"
         {
-            $$ = new ArrayExpressionNode($2);
+            $$ = ArrayExpressionNode($2);
         }
     | "[" ElementList "," "]"
         {
-            $$ = new ArrayExpressionNode($2.concat(null));
+            $$ = ArrayExpressionNode($2.concat(null));
         }
     | "[" ElementList "," Elision "]"
         {
-            $$ = new ArrayExpressionNode($2.concat($4));
+            $$ = ArrayExpressionNode($2.concat($4));
         }
     ;
 
@@ -295,22 +252,22 @@ Elision
 ObjectLiteral
     : "{" "}"
         {
-            $$ = new ObjectExpressionNode([]);
+            $$ = ObjectExpressionNode();
         }
     | "{" PropertyNameAndValueList "}"
         {
-            $$ = new ObjectExpressionNode($2);
+            $$ = ObjectExpressionNode($2);
         }
     | "{" PropertyNameAndValueList "," "}"
         {
-            $$ = new ObjectExpressionNode($2);
+            $$ = ObjectExpressionNode($2);
         }
     ;
 
 PropertyNameAndValueList
     : PropertyAssignment
         {
-            $$ = [$1];
+            $$ = $1;
         }
     | PropertyNameAndValueList "," PropertyAssignment
         {
@@ -321,7 +278,7 @@ PropertyNameAndValueList
 PropertyAssignment
     : PropertyName ":" AssignmentExpression
         {
-            $$ = {key: $1, value: $3, kind: "init"};
+            $$ = $1 + ':' + $3 + ',';
         }
     ;
 
@@ -334,7 +291,7 @@ PropertyName
 PropertySetParameterList
     : "IDENTIFIER"
         {
-            $$ = [new IdentifierNode($1)];
+            $$ = $1;
         }
     ;
 
@@ -342,11 +299,11 @@ MemberExpression
     : PrimaryExpression
     | MemberExpression "[" Expression "]"
         {
-            $$ = new MemberExpressionNode($1, $3, true);
+            $$ = MemberExpressionNode($1, $3, true);
         }
     | MemberExpression "." IdentifierName
         {
-            $$ = new MemberExpressionNode($1, $3, false);
+            $$ = MemberExpressionNode($1, $3, false);
         }
     ;
 
@@ -354,11 +311,11 @@ MemberExpressionNoBF
     : PrimaryExpressionNoBrace
     | MemberExpressionNoBF "[" Expression "]"
         {
-            $$ = new MemberExpressionNode($1, $3, true);
+            $$ = MemberExpressionNode($1, $3, true);
         }
     | MemberExpressionNoBF "." IdentifierName
         {
-            $$ = new MemberExpressionNode($1, $3, false);
+            $$ = MemberExpressionNode($1, $3, false);
         }
     ;
 
@@ -373,49 +330,49 @@ NewExpressionNoBF
 CallExpression
     : MemberExpression Arguments
         {
-            $$ = new CallExpressionNode($1, $2);
+            $$ = CallExpressionNode($1, $2);
         }
     | CallExpression Arguments
         {
-            $$ = new CallExpressionNode($1, $2);
+            $$ = CallExpressionNode($1, $2);
         }
     | CallExpression "[" Expression "]"
         {
-            $$ = new MemberExpressionNode($1, $3, true);
+            $$ = MemberExpressionNode($1, $3, true);
         }
     | CallExpression "." IdentifierName
         {
-            $$ = new MemberExpressionNode($1, $3, false);
+            $$ = MemberExpressionNode($1, $3, false);
         }
     ;
 
 CallExpressionNoBF
     : MemberExpressionNoBF Arguments
         {
-            $$ = new CallExpressionNode($1, $2);
+            $$ = CallExpressionNode($1, $2);
         }
     | CallExpressionNoBF Arguments
         {
-            $$ = new CallExpressionNode($1, $2);
+            $$ = CallExpressionNode($1, $2);
         }
     | CallExpressionNoBF "[" Expression "]"
         {
-            $$ = new MemberExpressionNode($1, $3, true);
+            $$ = MemberExpressionNode($1, $3, true);
         }
     | CallExpressionNoBF "." IdentifierName
         {
-            $$ = new MemberExpressionNode($1, $3, false);
+            $$ = MemberExpressionNode($1, $3, false);
         }
     ;
 
 IdentifierName
     : "IDENTIFIER"
         {
-            $$ = new IdentifierNode($1);
+            $$ = $1;
         }
     | ReservedWord
         {
-            $$ = new IdentifierNode($1);
+            $$ = $1;
         }
     ;
 
@@ -433,11 +390,11 @@ Arguments
 ArgumentList
     : AssignmentExpression
         {
-            $$ = [$1];
+            $$ = $1;
         }
     | ArgumentList "," AssignmentExpression
         {
-            $$ = $1.concat($3);
+            $$ = $1 + ',' + $3;
         }
     ;
 
@@ -455,11 +412,11 @@ PostfixExpression
     : LeftHandSideExpression
     | LeftHandSideExpression "++"
         {
-            $$ = new UpdateExpressionNode("++", $1, false);
+            $$ = UpdateExpressionNode("++", $1, false);
         }
     | LeftHandSideExpression "--"
         {
-            $$ = new UpdateExpressionNode("--", $1, false);
+            $$ = UpdateExpressionNode("--", $1, false);
         }
     ;
 
@@ -467,11 +424,11 @@ PostfixExpressionNoBF
     : LeftHandSideExpressionNoBF
     | LeftHandSideExpressionNoBF "++"
         {
-            $$ = new UpdateExpressionNode("++", $1, false);
+            $$ = UpdateExpressionNode("++", $1, false);
         }
     | LeftHandSideExpressionNoBF "--"
         {
-            $$ = new UpdateExpressionNode("--", $1, false);
+            $$ = UpdateExpressionNode("--", $1, false);
         }
     ;
 
@@ -490,49 +447,50 @@ UnaryExpr
         {
             @1.first_line = @1.last_line;
             @1.first_column = @1.last_column - 2;
-            $$ = new UpdateExpressionNode("++", $2, true);
+            $$ = UpdateExpressionNode("++", $2, true);
         }
     | "BR--" UnaryExpression
         {
             @1.first_line = @1.last_line;
             @1.first_column = @1.last_column - 2;
-            $$ = new UpdateExpressionNode("--", $2, true);
+            $$ = UpdateExpressionNode("--", $2, true);
         }
     | "++" UnaryExpression
         {
-            $$ = new UpdateExpressionNode("++", $2, true);
+            $$ = UpdateExpressionNode("++", $2, true);
         }
     | "--" UnaryExpression
         {
-            $$ = new UpdateExpressionNode("--", $2, true);
+            $$ = UpdateExpressionNode("--", $2, true);
         }
     | "+" UnaryExpression
         {
-            $$ = new UnaryExpressionNode("+", true, $2);
+            $$ = UnaryExpressionNode("+", true, $2);
         }
     | "-" UnaryExpression
         {
-            $$ = new UnaryExpressionNode("-", true, $2);
+            $$ = UnaryExpressionNode("-", true, $2);
         }
     | "!" UnaryExpression
         {
-            $$ = new UnaryExpressionNode("!", true, $2);
+            $$ = UnaryExpressionNode("!", true, $2);
         }
     ;
+
 
 MultiplicativeExpression
     : UnaryExpression
     | MultiplicativeExpression "*" UnaryExpression
         {
-            $$ = new BinaryExpressionNode("*", $1, $3);
+            $$ = BinaryExpressionNode("*", $1, $3);
         }
     | MultiplicativeExpression "/" UnaryExpression
         {
-            $$ = new BinaryExpressionNode("/", $1, $3);
+            $$ = BinaryExpressionNode("/", $1, $3);
         }
     | MultiplicativeExpression "%" UnaryExpression
         {
-            $$ = new BinaryExpressionNode("%", $1, $3);
+            $$ = BinaryExpressionNode("%", $1, $3);
         }
     ;
 
@@ -540,15 +498,15 @@ MultiplicativeExpressionNoBF
     : UnaryExpressionNoBF
     | MultiplicativeExpressionNoBF "*" UnaryExpression
         {
-            $$ = new BinaryExpressionNode("*", $1, $3);
+            $$ = BinaryExpressionNode("*", $1, $3);
         }
     | MultiplicativeExpressionNoBF "/" UnaryExpression
         {
-            $$ = new BinaryExpressionNode("/", $1, $3);
+            $$ = BinaryExpressionNode("/", $1, $3);
         }
     | MultiplicativeExpressionNoBF "%" UnaryExpression
         {
-            $$ = new BinaryExpressionNode("%", $1, $3);
+            $$ = BinaryExpressionNode("%", $1, $3);
         }
     ;
 
@@ -556,11 +514,11 @@ AdditiveExpression
     : MultiplicativeExpression
     | AdditiveExpression "+" MultiplicativeExpression
         {
-            $$ = new BinaryExpressionNode("+", $1, $3);
+            $$ = BinaryExpressionNode("+", $1, $3);
         }
     | AdditiveExpression "-" MultiplicativeExpression
         {
-            $$ = new BinaryExpressionNode("-", $1, $3);
+            $$ = BinaryExpressionNode("-", $1, $3);
         }
     ;
 
@@ -568,11 +526,11 @@ AdditiveExpressionNoBF
     : MultiplicativeExpressionNoBF
     | AdditiveExpressionNoBF "+" MultiplicativeExpression
         {
-            $$ = new BinaryExpressionNode("+", $1, $3);
+            $$ = BinaryExpressionNode("+", $1, $3);
         }
     | AdditiveExpressionNoBF "-" MultiplicativeExpression
         {
-            $$ = new BinaryExpressionNode("-", $1, $3);
+            $$ = BinaryExpressionNode("-", $1, $3);
         }
     ;
 
@@ -582,25 +540,26 @@ ShiftExpression
 
 ShiftExpressionNoBF
     : AdditiveExpressionNoBF
+    | DecoratorCalls
     ;
 
 RelationalExpression
     : ShiftExpression
     | RelationalExpression "<" ShiftExpression
         {
-            $$ = new BinaryExpressionNode("<", $1, $3);
+            $$ = BinaryExpressionNode("<", $1, $3);
         }
     | RelationalExpression ">" ShiftExpression
         {
-            $$ = new BinaryExpressionNode(">", $1, $3);
+            $$ = BinaryExpressionNode(">", $1, $3);
         }
     | RelationalExpression "<=" ShiftExpression
         {
-            $$ = new BinaryExpressionNode("<=", $1, $3);
+            $$ = BinaryExpressionNode("<=", $1, $3);
         }
     | RelationalExpression ">=" ShiftExpression
         {
-            $$ = new BinaryExpressionNode(">=", $1, $3);
+            $$ = BinaryExpressionNode(">=", $1, $3);
         }
     ;
 
@@ -608,19 +567,19 @@ RelationalExpressionNoIn
     : ShiftExpression
     | RelationalExpressionNoIn "<" ShiftExpression
         {
-            $$ = new BinaryExpressionNode("<", $1, $3);
+            $$ = BinaryExpressionNode("<", $1, $3);
         }
     | RelationalExpressionNoIn ">" ShiftExpression
         {
-            $$ = new BinaryExpressionNode(">", $1, $3);
+            $$ = BinaryExpressionNode(">", $1, $3);
         }
     | RelationalExpressionNoIn "<=" ShiftExpression
         {
-            $$ = new BinaryExpressionNode("<=", $1, $3);
+            $$ = BinaryExpressionNode("<=", $1, $3);
         }
     | RelationalExpressionNoIn ">=" ShiftExpression
         {
-            $$ = new BinaryExpressionNode(">=", $1, $3);
+            $$ = BinaryExpressionNode(">=", $1, $3);
         }
     ;
 
@@ -628,19 +587,19 @@ RelationalExpressionNoBF
     : ShiftExpressionNoBF
     | RelationalExpressionNoBF "<" ShiftExpression
         {
-            $$ = new BinaryExpressionNode("<", $1, $3);
+            $$ = BinaryExpressionNode("<", $1, $3);
         }
     | RelationalExpressionNoBF ">" ShiftExpression
         {
-            $$ = new BinaryExpressionNode(">", $1, $3);
+            $$ = BinaryExpressionNode(">", $1, $3);
         }
     | RelationalExpressionNoBF "<=" ShiftExpression
         {
-            $$ = new BinaryExpressionNode("<=", $1, $3);
+            $$ = BinaryExpressionNode("<=", $1, $3);
         }
     | RelationalExpressionNoBF ">=" ShiftExpression
         {
-            $$ = new BinaryExpressionNode(">=", $1, $3);
+            $$ = BinaryExpressionNode(">=", $1, $3);
         }
     ;
 
@@ -648,19 +607,19 @@ EqualityExpression
     : RelationalExpression
     | EqualityExpression "==" RelationalExpression
         {
-            $$ = new BinaryExpressionNode("==", $1, $3);
+            $$ = BinaryExpressionNode("==", $1, $3);
         }
     | EqualityExpression "!=" RelationalExpression
         {
-            $$ = new BinaryExpressionNode("!=", $1, $3);
+            $$ = BinaryExpressionNode("!=", $1, $3);
         }
     | EqualityExpression "===" RelationalExpression
         {
-            $$ = new BinaryExpressionNode("===", $1, $3);
+            $$ = BinaryExpressionNode("===", $1, $3);
         }
     | EqualityExpression "!==" RelationalExpression
         {
-            $$ = new BinaryExpressionNode("!==", $1, $3);
+            $$ = BinaryExpressionNode("!==", $1, $3);
         }
     ;
 
@@ -668,19 +627,19 @@ EqualityExpressionNoIn
     : RelationalExpressionNoIn
     | EqualityExpressionNoIn "==" RelationalExpressionNoIn
         {
-            $$ = new BinaryExpressionNode("==", $1, $3);
+            $$ = BinaryExpressionNode("==", $1, $3);
         }
     | EqualityExpressionNoIn "!=" RelationalExpressionNoIn
         {
-            $$ = new BinaryExpressionNode("!=", $1, $3);
+            $$ = BinaryExpressionNode("!=", $1, $3);
         }
     | EqualityExpressionNoIn "===" RelationalExpressionNoIn
         {
-            $$ = new BinaryExpressionNode("===", $1, $3);
+            $$ = BinaryExpressionNode("===", $1, $3);
         }
     | EqualityExpressionNoIn "!==" RelationalExpressionNoIn
         {
-            $$ = new BinaryExpressionNode("!==", $1, $3);
+            $$ = BinaryExpressionNode("!==", $1, $3);
         }
     ;
 
@@ -688,19 +647,19 @@ EqualityExpressionNoBF
     : RelationalExpressionNoBF
     | EqualityExpressionNoBF "==" RelationalExpression
         {
-            $$ = new BinaryExpressionNode("==", $1, $3);
+            $$ = BinaryExpressionNode("==", $1, $3);
         }
     | EqualityExpressionNoBF "!=" RelationalExpression
         {
-            $$ = new BinaryExpressionNode("!=", $1, $3);
+            $$ = BinaryExpressionNode("!=", $1, $3);
         }
     | EqualityExpressionNoBF "===" RelationalExpression
         {
-            $$ = new BinaryExpressionNode("===", $1, $3);
+            $$ = BinaryExpressionNode("===", $1, $3);
         }
     | EqualityExpressionNoBF "!==" RelationalExpression
         {
-            $$ = new BinaryExpressionNode("!==", $1, $3);
+            $$ = BinaryExpressionNode("!==", $1, $3);
         }
     ;
 
@@ -740,11 +699,40 @@ BitwiseORExpressionNoBF
     : BitwiseXORExpressionNoBF
     ;
 
+DecoratorCalls
+    : PrimaryExpressionNoBrace DecoratorChain
+        {
+            $$ = DecoratorCallNode($1, $2);
+        }
+    ;
+
+DecoratorChain
+    : DecoratorChainEntity
+        {
+            $$ = DecoratorChainContext($1);
+        }
+    | DecoratorChain DecoratorChainEntity
+        {
+            $$ = DecoratorChainContext($2, $1);
+        }
+    ;
+
+DecoratorChainEntity
+    : "|" "IDENTIFIER"
+        {
+            $$ = DecoratorChainCallNode($2);
+        }
+    | "|" "IDENTIFIER" ":" ArgumentList
+        {
+            $$ = DecoratorChainCallNode($2, $4)
+        }
+    ;
+
 LogicalANDExpression
     : BitwiseORExpression
     | LogicalANDExpression "&&" BitwiseORExpression
         {
-            $$ = new LogicalExpressionNode("&&", $1, $3);
+            $$ = LogicalExpressionNode("&&", $1, $3);
         }
     ;
 
@@ -752,7 +740,7 @@ LogicalANDExpressionNoIn
     : BitwiseORExpressionNoIn
     | LogicalANDExpressionNoIn "&&" BitwiseORExpressionNoIn
         {
-            $$ = new LogicalExpressionNode("&&", $1, $3);
+            $$ = LogicalExpressionNode("&&", $1, $3);
         }
     ;
 
@@ -760,7 +748,7 @@ LogicalANDExpressionNoBF
     : BitwiseORExpressionNoBF
     | LogicalANDExpressionNoBF "&&" BitwiseORExpression
         {
-            $$ = new LogicalExpressionNode("&&", $1, $3);
+            $$ = LogicalExpressionNode("&&", $1, $3);
         }
     ;
 
@@ -768,7 +756,7 @@ LogicalORExpression
     : LogicalANDExpression
     | LogicalORExpression "||" LogicalANDExpression
         {
-            $$ = new LogicalExpressionNode("||", $1, $3);
+            $$ = LogicalExpressionNode("||", $1, $3);
         }
     ;
 
@@ -776,7 +764,7 @@ LogicalORExpressionNoIn
     : LogicalANDExpressionNoIn
     | LogicalORExpressionNoIn "||" LogicalANDExpressionNoIn
         {
-            $$ = new LogicalExpressionNode("||", $1, $3);
+            $$ = LogicalExpressionNode("||", $1, $3);
         }
     ;
 
@@ -784,7 +772,7 @@ LogicalORExpressionNoBF
     : LogicalANDExpressionNoBF
     | LogicalORExpressionNoBF "||" LogicalANDExpression
         {
-            $$ = new LogicalExpressionNode("||", $1, $3);
+            $$ = LogicalExpressionNode("||", $1, $3);
         }
     ;
 
@@ -792,7 +780,7 @@ ConditionalExpression
     : LogicalORExpression
     | LogicalORExpression "?" AssignmentExpression ":" AssignmentExpression
         {
-            $$ = new ConditionalExpressionNode($1, $3, $5);
+            $$ = ConditionalExpressionNode($1, $3, $5);
         }
     ;
 
@@ -800,7 +788,7 @@ ConditionalExpressionNoIn
     : LogicalORExpressionNoIn
     | LogicalORExpressionNoIn "?" AssignmentExpression ":" AssignmentExpressionNoIn
         {
-            $$ = new ConditionalExpressionNode($1, $3, $5);
+            $$ = ConditionalExpressionNode($1, $3, $5);
         }
     ;
 
@@ -808,20 +796,47 @@ ConditionalExpressionNoBF
     : LogicalORExpressionNoBF
     | LogicalORExpressionNoBF "?" AssignmentExpression ":" AssignmentExpression
         {
-            $$ = new ConditionalExpressionNode($1, $3, $5);
+            $$ = ConditionalExpressionNode($1, $3, $5);
+        }
+    ;
+
+ConditionalExpressionCast
+    : LogicalORExpression
+    | LogicalORExpression "?" AssignmentExpression
+        {
+            $$ = ConditionalExpressionNode($1, $3);
+        }
+    ;
+
+ConditionalExpressionCastNoIn
+    : LogicalORExpressionNoIn
+    | LogicalORExpressionNoIn "?" AssignmentExpressionNoIn
+        {
+            $$ = ConditionalExpressionNode($1, $3);
+        }
+    ;
+
+ConditionalExpressionCastNoBF
+    : LogicalORExpressionNoBF
+    | LogicalORExpressionNoBF "?" AssignmentExpression
+        {
+            $$ = ConditionalExpressionNode($1, $3);
         }
     ;
 
 AssignmentExpression
     : ConditionalExpression
+    | ConditionalExpressionCast
     ;
 
 AssignmentExpressionNoIn
     : ConditionalExpressionNoIn
+    | ConditionalExpressionCastNoIn
     ;
 
 AssignmentExpressionNoBF
     : ConditionalExpressionNoBF
+    | ConditionalExpressionCastNoBF
     ;
 
 Expression
@@ -868,38 +883,37 @@ Literal
     | BooleanLiteral
     | NumericLiteral
     | StringLiteral
-    | RegularExpressionLiteral
     ;
 
 NullLiteral
     : "NULL"
         {
-            $$ = new LiteralNode(null);
+            $$ = LiteralNode(null);
         }
     ;
 
 BooleanLiteral
     : "TRUE"
         {
-            $$ = new LiteralNode(true);
+            $$ = LiteralNode(true);
         }
     | "FALSE"
         {
-            $$ = new LiteralNode(false);
+            $$ = LiteralNode(false);
         }
     ;
 
 NumericLiteral
     : "NUMERIC_LITERAL"
         {
-            $$ = new LiteralNode(parseNumericLiteral($1));
+            $$ = LiteralNode(parseNumericLiteral($1));
         }
     ;
 
 StringLiteral
     : "STRING_LITERAL"
         {
-            $$ = new LiteralNode($1);
+            $$ = LiteralNode($1);
         }
     ;
 
@@ -926,17 +940,6 @@ function parseNumericLiteral(literal) {
 	}
 }
 
-/* Begin Parser Customization Methods */
-var _originalParseMethod = parser.parse;
-
-parser.parse = function(source, args) {
-	parser.wasNewLine = false;
-	parser.newLine = false;
-	parser.restricted = false;
-    console.log("ARGS: ", args);
-	return new Function('return ' + source);
-};
-
 parser.parseError = function(str, hash) {
 //		alert(JSON.stringify(hash) + "\n\n\n" + parser.newLine + "\n" + parser.wasNewLine + "\n\n" + hash.expected.indexOf("';'"));
 	if (!((hash.expected && hash.expected.indexOf("';'") >= 0) && (hash.token === "}" || hash.token === "EOF" || hash.token === "BR++" || hash.token === "BR--" || parser.newLine || parser.wasNewLine))) {
@@ -946,56 +949,27 @@ parser.parseError = function(str, hash) {
 /* End Parser Customization Methods */
 
 /* Begin AST Node Constructors */
-function ProgramNode(body) {
-	this.type = "Program";
-	this.body = body;
-}
-
-function EmptyStatementNode() {
-	this.type = "EmptyStatement";
-}
-
-function BlockStatementNode(body) {
-	this.type = "BlockStatement";
-	this.body = body;
+function EmptyStatementNode(statement) {
 }
 
 function ExpressionStatementNode(expression) {
-	this.type = "ExpressionStatement";
-	this.expression = expression;
+	return expression;
 }
 
 function LabeledStatementNode(label, body) {
-	this.type = "LabeledStatement";
-	this.label = label;
-	this.body = body;
-}
-
-function VariableDeclarationNode(declarations, kind) {
-	this.type = "VariableDeclaration";
-	this.declarations = declarations;
-	this.kind = kind;
-}
-
-function VariableDeclaratorNode(id, init) {
-	this.type = "VariableDeclarator";
-	this.id = id;
-	this.init = init;
+	return label + ':' + body;
 }
 
 function ThisExpressionNode() {
-	this.type = "ThisExpression";
+	return 'this';
 }
 
 function ArrayExpressionNode(elements) {
-    console.log(elements);
-	this.type = "ArrayExpression";
-	this.elements = elements;
+    return '[' + elements + ']';
 }
 
 function ObjectExpressionNode(properties) {
-	this.type = "ObjectExpression";
-	this.properties = properties;
+	return '{' + properties + '}';
 }
 
 function SequenceExpressionNode(expressions) {
@@ -1004,85 +978,62 @@ function SequenceExpressionNode(expressions) {
 }
 
 function UnaryExpressionNode(operator, prefix, argument) {
-	this.type = "UnaryExpression";
-	this.operator = operator;
-	this.prefix = prefix;
-	this.argument = argument;
+	return operator + argument;
 }
 
 function BinaryExpressionNode(operator, left, right) {
-	this.type = "BinaryExpression";
-	this.operator = operator;
-	this.left = left;
-	this.right = right;
-}
-
-function AssignmentExpressionNode(operator, left, right) {
-	this.type = "AssignmentExpression";
-	this.operator = operator;
-	this.left = left;
-	this.right = right;
+	return left + operator + right;
 }
 
 function UpdateExpressionNode(operator, argument, prefix) {
-	this.type = "UpdateExpression";
-	this.operator = operator;
-	this.argument = argument;
-	this.prefix = prefix;
+    if (prefix) {
+        return operator + argument;
+    }
+	return argument + operator;
 }
 
 function LogicalExpressionNode(operator, left, right) {
-	this.type = "LogicalExpression";
-	this.operator = operator;
-	this.left = left;
-	this.right = right;
+	return left + operator + right;
 }
 
 function ConditionalExpressionNode(test, consequent, alternate) {
-	this.type = "ConditionalExpression";
-	this.test = test;
-	this.consequent = consequent;
-	this.alternate = alternate;
+    if (alternate === undefined) {
+        return test + '?' + consequent + ':' + undefined;
+    }
+	return test + '?' + consequent + ':' + alternate;
 }
 
 function CallExpressionNode(callee, args) {
-	this.type = "CallExpression";
-	this.callee = callee;
-	this.arguments = args;
+	return callee + '(' + args + ')';
 }
 
 function MemberExpressionNode(object, property, computed) {
-	this.type = "MemberExpression";
-	this.object = object;
-	this.property = property;
-	this.computed = computed;
+	if (computed) {
+	    return object + '[' + property + ']';
+	}
+	return object + '.' + property;
+}
+
+function DecoratorChainCallNode(identifier, argumentsDecorator) {
+    if (argumentsDecorator === undefined) {
+        return function DecoratorChainCallNodeUser(__context) { return 'decorators.' + identifier + '.call(' + __context + ')'; };
+    }
+    return function DecoratorChainCallNodeUser(__context) { return 'decorators.' + identifier + '.call(' + __context + ',' + argumentsDecorator + ')'; };
+}
+
+function DecoratorChainContext(fn, entity) {
+    return function DecoratorChainContextCreator(__context) { return fn(entity !== undefined ? entity(__context) : __context); };
+}
+
+function DecoratorCallNode(caller, decorator) {
+    return decorator(caller);
 }
 
 function IdentifierNode(name) {
-	this.type = "Identifier";
-	this.name = name;
+	return name;
 }
 
 function LiteralNode(value) {
-	this.type = "Literal";
-	this.value = value;
+	return value;
 }
-
-function SourceLocation(source, start, end) {
-	this.source = source;
-	this.start = start;
-	this.end = end;
-}
-
-/* Object and Array patterns are not part of the ECMAScript Standard
-function ObjectPatternNode() {
-	this.type = "ObjectPattern";
-	this.properties = [];
-}
-
-function ArrayPatternNode() {
-	this.type = "ArrayPattern";
-	this.elements = [];
-}
-*/
 /* End AST Node Constructors */
