@@ -154,7 +154,7 @@ FunctionBody
 Program
     : SourceElements EOF
         {
-            $$ = (function(decorators) { return new Function('data', 'return ' + $1 + ';' ) })(decorators);
+            $$ = (function() { return new Function('data', 'decorators', 'return ' + $1 + ';' ) })();
             return $$;
         }
     ;
@@ -702,7 +702,11 @@ BitwiseORExpressionNoBF
 DecoratorCalls
     : PrimaryExpressionNoBrace DecoratorChain
         {
-            $$ = DecoratorCallNode($1, $2);
+            $$ = DecoratorCallNode($2, $1);
+        }
+    | DecoratorChain
+        {
+            $$ = DecoratorCallNode($1);
         }
     ;
 
@@ -725,6 +729,10 @@ DecoratorChainEntity
     | "|" "IDENTIFIER" ":" ArgumentList
         {
             $$ = DecoratorChainCallNode($2, $4)
+        }
+    | "IDENTIFIER" ":" ArgumentList
+        {
+            $$ = DecoratorChainCallNode($1, $3)
         }
     ;
 
@@ -1016,16 +1024,16 @@ function MemberExpressionNode(object, property, computed) {
 
 function DecoratorChainCallNode(identifier, argumentsDecorator) {
     if (argumentsDecorator === undefined) {
-        return function DecoratorChainCallNodeUser(__context) { return 'decorators.' + identifier + '.call(' + __context + ')'; };
+        return function DecoratorChainCallNodeUser(__context) { return 'decorators.' + identifier + '(' + ((__context) ? __context : '') + ')'; };
     }
-    return function DecoratorChainCallNodeUser(__context) { return 'decorators.' + identifier + '.call(' + __context + ',' + argumentsDecorator + ')'; };
+    return function DecoratorChainCallNodeUser(__context) { return 'decorators.' + identifier + '(' + ((__context) ? __context + ',' : '') + argumentsDecorator + ')'; };
 }
 
 function DecoratorChainContext(fn, entity) {
     return function DecoratorChainContextCreator(__context) { return fn(entity !== undefined ? entity(__context) : __context); };
 }
 
-function DecoratorCallNode(caller, decorator) {
+function DecoratorCallNode(decorator, caller) {
     return decorator(caller);
 }
 
