@@ -154,7 +154,7 @@ FunctionBody
 Program
     : SourceElements EOF
         {
-            $$ = (function() { return new Function('data', 'decorators', 'return ' + $1 + ';' ) })();
+            $$ = (function() { return new Function('data', 'decorators', 'vdomUtils', 'return ' + $1 + ';' ) })();
             return $$;
         }
     ;
@@ -730,7 +730,7 @@ DecoratorChainEntity
         {
             $$ = DecoratorChainCallNode($2, $4)
         }
-    | "IDENTIFIER" ":" ArgumentList
+    | "|" "IDENTIFIER" ":" ArgumentList
         {
             $$ = DecoratorChainCallNode($1, $3)
         }
@@ -1024,9 +1024,9 @@ function MemberExpressionNode(object, property, computed) {
 
 function DecoratorChainCallNode(identifier, argumentsDecorator) {
     if (argumentsDecorator === undefined) {
-        return function DecoratorChainCallNodeUser(__context) { return 'decorators.' + identifier + '(' + ((__context) ? __context : '') + ')'; };
+        return function DecoratorChainCallNodeUser(__context) { return 'decorators.' + identifier + '(' + __context + ')'; };
     }
-    return function DecoratorChainCallNodeUser(__context) { return 'decorators.' + identifier + '(' + ((__context) ? __context + ',' : '') + argumentsDecorator + ')'; };
+    return function DecoratorChainCallNodeUser(__context) { return 'decorators.' + identifier + '(' + __context + ',' + argumentsDecorator + ')'; };
 }
 
 function DecoratorChainContext(fn, entity) {
